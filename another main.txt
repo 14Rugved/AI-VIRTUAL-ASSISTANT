@@ -1,0 +1,320 @@
+import smtplib
+import cv2
+import pyttsx3
+import speech_recognition as sr
+import datetime
+import pywhatkit
+import os
+import uuid
+import webbrowser
+import requests
+import openai
+import pyjokes
+
+from pyttsx3 import Engine
+
+from haha import initialize_speech_engine, initialize_recogn
+api_key = "f2d8321da0msh6092119899eed9ap15f564jsneffc007b6b3a"
+
+engine = pyttsx3.init('sapi5')
+voices = engine.getProperty('voices')
+engine.setProperty('rate', 169)
+engine.setProperty('voice', voices[0].id)
+
+contact = {
+
+    "mamma": "9324730330",
+    "papa": "7738767377",
+    "saif": "7304794286",
+    "sahil": "8454066897"
+
+}
+def tell_joke():
+    joke = pyjokes.get_joke()
+    speak(joke)
+
+
+
+def save_note(note_text):
+    # Generate a unique filename for each note
+    note_id = str(uuid.uuid4())
+    note_filename = f"notes/{note_id}.txt"
+
+    # Create a "notes" directory if it doesn't exist
+    os.makedirs("notes", exist_ok=True)
+
+    # Write the note content to the file
+    with open(note_filename, "w") as note_file:
+        note_file.write(note_text)
+
+    return note_id
+
+
+def listen_and_recognize(recognizer):
+    with sr.Microphone() as source:
+        print("Listening...")
+        recognizer.pause_threshold = 1
+        audio = recognizer.listen(source)
+    try:
+        print("Recognizing...")
+        query = recognizer.recognize_google(audio, language='en-in')
+        print(f"You said: {query}\n")
+        return query
+    except sr.UnknownValueError:
+        print("Sorry, I couldn't understand your voice.")
+        return ""
+    except sr.RequestError:
+        print("Sorry, there was an issue with the voice recognition service.")
+        return ""
+
+
+def initialize_recognition_engine():
+    r = sr.Recognizer()
+    with sr.Microphone() as source:
+        print("Calibrating microphone for noise...")
+        r.adjust_for_ambient_noise(source)
+    return r
+
+
+def speak(audio):
+    engine.say(audio)
+    engine.runAndWait()
+    print(audio)
+
+
+def takeCommand():
+    command = sr.Recognizer()
+    with sr.Microphone() as source:
+        print("Listening")
+        command.pause_threshold = 0.8
+        audio = command.listen(source)
+    try:
+        print("Recognizing")
+        query = command.recognize_google(audio, language='en-in')
+        print(f"You said: {query}")
+    except Exception as Error:
+        print("Can you repeat?")
+        return "None"
+    return query.lower()
+
+
+def Wish():
+    hour = int(datetime.datetime.now().hour)
+    if 0 <= hour < 12:
+        speak("Good Morning!")
+    elif 12 <= hour < 17:
+        speak("Good Afternoon")
+    else:
+        speak("Good evening!")
+    speak("Hello, I am Callisto. How can I help you today?")
+
+
+def chat_with_openai(messages, user_input):
+    messages.append({"role": "user", "content": user_input})
+    response = openai.ChatCompletion.create(
+        model="gpt-3.5-turbo",
+        messages=messages)
+    reply = response["choices"][0]["message"]["content"]
+    messages.append({"role": "assistant", "content": reply})
+    print(reply)
+    return reply
+
+
+def run_chatbot():
+    speech_engine = initialize_speech_engine()
+    recognition_engine = initialize_recognition_engine()
+    messages = []
+    system_msg = "You are ChatGPT, your personal AI assistant. How can I assist you today?"
+    messages.append({"role": "system", "content": system_msg})
+    speak("Your new assistant is ready!")
+
+    while True:
+        user_input = listen_and_recognize(recognition_engine)
+        if not user_input:
+            continue
+
+        if 'stop' in user_input.lower():
+            speak("Goodbye! Have a great day.")
+            break
+
+        reply = chat_with_openai(messages, user_input)
+        speak(reply)
+
+
+def send_email():
+    # Define your email settings
+    smtp_server = "smtp.gmail.com"  # Use the SMTP server for your email provider
+    smtp_port = 587
+    sender_email = "rugved.221235.co@mhssce.ac.in"
+    sender_password = "rchr dmtp ktgp iuqj"
+    recipient_email = "madresaif934@gmail.com"
+
+    speak("What's the subject of the email?")
+    subject = takeCommand()
+
+    speak("What's the content of the email?")
+    body = takeCommand()
+
+    if subject and body:
+        try:
+            server = smtplib.SMTP(smtp_server, smtp_port)
+            server.starttls()
+            server.login(sender_email, sender_password)
+            email_text = f"Subject: {subject}\n\n{body}"
+            server.sendmail(sender_email, recipient_email, email_text)
+            server.quit()
+            speak("Email sent successfully.")
+        except Exception as e:
+            speak("Sorry, I couldn't send the email. Please try again later.")
+
+
+def get_weather(city):
+    base_url = "http://api.openweathermap.org/data/2.5/weather"
+    params = {
+        "q": city,
+        "appid": api_key,
+    }
+
+    response = requests.get(base_url, params=params)
+    data = response.json()
+
+    if data["cod"] == 200:
+        weather_info = data["weather"][0]["description"]
+        temperature = data["main"]["temp"]
+        temperature_celsius = temperature - 273.15  # Convert temperature to Celsius
+        speak(f"The weather in {city} is {weather_info}. The temperature is {temperature_celsius:.2f} degrees Celsius.")
+    else:
+        speak("Sorry, I couldn't fetch the weather data for that location.")
+
+def open_camera_and_capture():
+    # Open the camera
+    cap = cv2.VideoCapture(0)
+
+    # Check if the camera is opened successfully
+    if not cap.isOpened():
+        print("Error: Could not open the camera.")
+        return
+
+    while True:
+        # Capture a frame from the camera
+        ret, frame = cap.read()
+
+        # Display the captured frame
+        cv2.imshow("Camera", frame)
+
+        # Check for a specific command to capture a picture
+        key = cv2.waitKey(1)
+        if key == ord("c"):
+            # Save the captured frame as a picture
+            cv2.imwrite("captured_picture.jpg", frame)
+            print("Picture captured as 'captured_picture.jpg'.")
+
+        # Check for an exit command
+        elif key == ord("q"):
+            break
+
+    # Release the camera and close the OpenCV window
+    cap.release()
+    cv2.destroyAllWindows()
+
+
+
+def wake_up_command():
+    # Add your wake-up command here
+    return "hey kalisto"
+
+if __name__ == "__main__":
+
+    # Listen for a wake-up command
+    while True:
+        command = takeCommand()
+        if wake_up_command() in command.lower():
+            speak("Yes, how can I assist you?")
+            break
+
+
+    while True:
+     query = takeCommand()  # Move the speech recognition inside the main if block
+
+     if 'whatsapp' in query.lower():
+        try:
+            while True:
+                speak("Contact")
+                print("Contact")
+                name = takeCommand()
+                if name == 'None' or name not in contact:
+                    print("Mention Contact Again")
+                    continue
+                else:
+                    break
+
+            while True:
+                speak("Message")
+                print("message")
+                msg = takeCommand()
+                if msg == 'None':
+                    print("Mention Message Again")
+                    continue
+                else:
+                    break
+            pywhatkit.sendwhatmsg_instantly(f"+91{contact[name]}", f"{msg}", 15, True, 4)
+        except Exception as e:
+            speak('I think the internet connection is not proper.')
+            speak('Please try connecting again.')
+
+     if 'time' in query:
+        query = query.replace("what is the time", "")  # Corrected this line
+
+        n = datetime.datetime.now()
+
+        timee = n.strftime('%H:%M:%S')
+
+        speak("The time is " + timee)
+
+
+     if 'take note' in query:
+        speak("Sure, please dictate your note.")
+        note_text = takeCommand()
+        if note_text != 'None':
+            note_id = save_note(note_text)
+            speak("Note saved with ID: " + note_id)
+
+     if 'open obs' in query.lower():
+        obs_code_path = r"C:\Program Files\obs-studio\bin\64bit\obs64.exe"
+        os.system(obs_code_path)
+        speak("OBS Studio is now open.")
+
+     if 'open visual' in query.lower():
+        visual_code_path = r"C:\Users\Admin\AppData\Local\Programs\Microsoft VS Code\Code.exe"
+        os.system(visual_code_path)
+        speak("visual Studio is now open.")
+
+     if 'youtube' in query.lower():
+        speak("Tell me a youtube video")
+        video = takeCommand()
+        pywhatkit.playonyt(f"{video}")
+
+     if 'search on google' in query.lower():
+        speak("What would you like to search for?")
+        search_query = takeCommand()
+        if search_query != "None":
+            search_url = f"https://www.google.com/search?q={search_query}"
+            webbrowser.open(search_url)
+
+     if 'tell me weather' in query.lower():
+        speak("Sure! Please tell me the city name.")
+        city = takeCommand()
+        get_weather(city)
+
+     if 'chatbot' in query.lower():
+        speak("opening chatbot")
+        run_chatbot()
+
+     if 'send email' in query.lower():
+        send_email()
+
+     if 'open camera' in query.lower():
+        open_camera_and_capture()
+
+     if 'tell me a joke' in query.lower():
+        tell_joke()
